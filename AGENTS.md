@@ -1,16 +1,54 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The codebase centers on the TypeScript exercises in `banking/`, where `banking.ts` implements domain logic, `banking.test.ts` holds Vitest coverage, and `types.ts` defines shared interfaces. The accompanying `banking-spec.md` records functional requirements. Prompt experiments live in `prompts/`, split into English and Polish variants, while `charts/request.md` documents Mermaid diagram tasks. Static assets reside under `docs/`, and root-level configs (`tsconfig.json`, `package.json`) drive tooling.
+This is a Python-based banking application with Streamlit frontend and PostgreSQL backend. The codebase centers on:
+
+- `banking/` - Domain logic with `banking.py` implementing business rules, `types.py` defining domain models, and `test_banking.py` providing pytest coverage. The `banking-spec.md` documents functional requirements.
+- `db/` - Database layer with `connection.py` for PostgreSQL connections, `models.py` for data entities, and `crud.py` for database operations.
+- `migrations/` - Yoyo migration scripts for database schema management.
+- `app.py` - Main Streamlit application entry point.
+- `prompts/` - Prompt experiments (English and Polish variants).
+- `charts/` - Mermaid diagram specifications.
+- `docs/` - Static documentation assets.
+
+Root-level configs (`pyproject.toml`, `requirements.txt`, `yoyo.ini`) drive tooling.
 
 ## Build, Test, and Development Commands
-Run `npm install` before contributing. Use `npm test` to execute the Vitest suite; it auto-picks up `*.test.ts` files such as `banking/banking.test.ts`. When developing new flows, keep a test watcher running via `npx vitest --watch` to catch regressions early.
+Install dependencies with `pip install -r requirements.txt`. Configure database by copying `.env.example` to `.env` and updating credentials. Run migrations with `yoyo apply --config yoyo.ini`. 
+
+Execute tests using `pytest` or `pytest --cov=.` for coverage reports. When developing, keep tests running via `pytest --watch` or `ptw` to catch regressions early.
+
+Start the application with `streamlit run app.py`.
 
 ## Coding Style & Naming Conventions
-Author TypeScript 5.8+ code with strict typings and no `any`, aligning with `CONVENTIONS.md`. Prefer `const` and pure functions where possible. Follow the existing two-space indentation, trailing commas, and double-quoted imports visible in `banking/*.ts`. Create new modules using PascalCase type names (`WithdrawalRequest`) and camelCase functions (`processWithdrawal`). Keep files focused: domain logic in `banking/`, supporting data or prompts in their respective folders.
+Write Python 3.11+ code with strict type hints (mypy-compatible). Avoid `Any` types where possible. Format with Black (100-char line length). Use `snake_case` for functions/variables and `PascalCase` for classes. Prefer dataclasses and immutable structures. Keep domain logic in `banking/`, database operations in `db/`, and UI in `app.py` or `pages/`.
+
+Follow PEP 8 standards with 4-space indentation. Use type hints consistently:
+```python
+def process_withdrawal(account: BankAccount, request: WithdrawalRequest) -> Union[WithdrawalResult, WithdrawalError]:
+    ...
+```
 
 ## Testing Guidelines
-Vitest is the single source of truth. Mirror the `describe`/`it` nesting from `banking/banking.test.ts`, and name new specs `<feature>.test.ts` beside the code they verify. Cover both happy paths and error codes (e.g., `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`). When adding behaviours, extend the spec in `banking-spec.md` and ensure corresponding tests assert messages and codes explicitly.
+Pytest is the testing framework. Mirror the class-based structure from `banking/test_banking.py`, using descriptive class names like `TestAccountCreation` and test methods prefixed with `test_should_*`. Place test files as `test_*.py` beside the code they verify.
+
+Cover both happy paths and error conditions (e.g., `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`). Use fixtures for reusable test data. When adding features, update `banking-spec.md` and ensure tests assert both behavior and error messages explicitly.
+
+## Database Guidelines
+Use Yoyo migrations for all schema changes. Never modify the database schema directly. Create migrations with `yoyo new -m "description"`. Each migration should include both apply and rollback steps.
+
+Follow these patterns:
+- Use `Decimal` for currency amounts
+- Include proper foreign keys and indexes
+- Add timestamps (`created_at`, `updated_at`) to all tables
+- Use enums for fixed value sets (e.g., transaction types)
 
 ## Commit & Pull Request Guidelines
-Follow the Conventional Commits pattern seen in history (e.g., `feat: add overdraft guard`, `chore: update prompts`). Scope commits tightly and include failing-test reproductions when fixing bugs. Pull requests should link to any tracked task, summarize behavioural changes, and attach CLI output (`npm test`) or screenshots for documentation updates. Request review from another agent when altering shared abstractions or prompts to maintain consistency.
+Follow Conventional Commits (e.g., `feat: add withdrawal validation`, `fix: handle currency mismatch`, `chore: update dependencies`). Scope commits tightly and include test cases when fixing bugs.
+
+PRs should:
+- Link to tracked tasks
+- Summarize behavioral changes
+- Include pytest output showing passing tests
+- Update relevant documentation
+- Request review when changing shared abstractions or database schema

@@ -1,0 +1,15 @@
+# Core dependencies
+streamlit>=1.31.0
+psycopg2-binary>=2.9.9
+yoyo-migrations>=8.2.0
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+
+# Development
+black>=24.0.0
+flake8>=7.0.0
+mypy>=1.8.0
