@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AT-mini – Architektura (Mermaid)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; margin: 2rem auto; max-width: 1100px; padding: 0 1rem; line-height: 1.6; }
+    h1, h2 { line-height: 1.25; }
+    .diagram { margin: 2rem 0; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa; }
+    .note { color: #555; font-size: 0.95rem; }
+    footer { margin-top: 3rem; color: #666; font-size: 0.9rem; }
+    code { background: #f3f4f6; padding: 0 .25rem; border-radius: 4px; }
+  </style>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, securityLevel: "loose", theme: "default" });
+  </script>
+</head>
+<body>
+
+  <h1>AT-mini – Architektura (Mermaid)</h1>
+  <p class="note">Zestaw diagramów architektury projektu: UI (Streamlit), API (FastAPI) oraz warstwa danych (PostgreSQL/Timescale) z obliczeniami wskaźników AT i ukrytej akumulacji.</p>
+
+  <h2>1) Architektura – obraz całości</h2>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    %% --- Aktorzy / Klienci ---
+    U[Użytkownik<br/>viewer] -->|przeglądarka| UI
+    subgraph Cloud["Subdomena UI (HTTPS)"]
+      UI[Streamlit Dashboard<br/>Auth: token/API key / SSO]
+    end
+
+    %% --- API ---
+    UI -->|REST: /candles /indicators /accumulation_candidates| API
+    subgraph SVC["Serwis backend (FastAPI)"]
+      API[FastAPI<br/>CORS + RateLimit + /health + /metrics]
+    end
+
+    %% --- Baza / Obliczenia ---
+    API -->|SQL read| IND_SNAP
+    JOB -->|INSERT/UPSERT\ninkrementalnie| IND_SNAP
+
+    subgraph DB["PostgreSQL / TimescaleDB"]
+      BRQ[(trans.br_quotes<br/>OHLCV 1m)]
+      V1[[at.v_candles_1m<br/>normalizacja OHLCV]]
+      VBASE[[at.v_base_20<br/>okna: ATR/SMA/OBV/box/vol]]
+      VHID[[at.v_hidden_20<br/>C1..C5 + score + setup]]
+      IND_SNAP[(at.indicator_snapshot<br/>values JSONB<br/>params JSONB)]
+    end
+
+    BRQ --> V1 --> VBASE --> VHID --> IND_SNAP
+
+    %% --- Orkiestracja / ETL ---
+    subgraph SCHED["Harmonogram"]
+      CRON[[pg_cron / Timescale job<br/>intraday/EOD]]
+    end
+    CRON --> JOB
+
+    subgraph ETL["Materializacja wskaźników"]
+      JOB[AT Materializer<br/>SQL INSERT ... ON CONFLICT]
+    end
+
+    %% --- Monitoring / Observability ---
+  API -->|/metrics| MON["Monitoring<br/>(Prometheus/Grafana)"]
+    JOB --> LOGS[(run_log / logi joba)]
+
+    %% --- Dodatkowe etykiety ---
+  classDef store fill:#f6f6ff,stroke:#5b6cff,stroke-width:1px;
+  classDef view fill:#eefcff,stroke:#00a3a3,stroke-width:1px,stroke-dasharray: 3 3;
+  classDef svc fill:#fff5e6,stroke:#ff9e00,stroke-width:1px;
+  classDef actor fill:#f0f0f0,stroke:#999,stroke-width:1px;
+    class BRQ,IND_SNAP,LOGS store
+    class V1,VBASE,VHID view
+    class API,JOB,UI,MON svc
+    class U actor
+</pre>
+  </div>
+
+  <h2>2) Pipeline danych (krok po kroku)</h2>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    A[(trans.br_quotes<br/>1m OHLCV)]:::store
+    B[[at.v_candles_1m<br/>map: open/high/low/close/volume/ts]]:::view
+    C[[at.v_base_20<br/>ATR/SMA/OBV/box/vol avg/sd]]:::view
+    D[[at.v_hidden_20<br/>C1 kontrakcja<br/>C2 up/down vol<br/>C3 money flow+flat<br/>C4 no-supply<br/>C5 spring<br/>score 0-100 + setup]]:::view
+    E[AT Materializer<br/>INSERT ... ON CONFLICT]:::svc
+    F[(at.indicator_snapshot<br/>params JSONB<br/>values JSONB)]:::store
+    G[FastAPI<br/>/indicators /candles]:::svc
+    H[Streamlit UI<br/>heatmap + gauge + sygnały]:::svc
+    I[[pg_cron / Timescale job]]:::svc
+
+    A --> B --> C --> D --> E --> F
+    I --> E
+    F <-->|SELECT| G --> H
+
+    classDef store fill:#f6f6ff,stroke:#5b6cff,stroke-width:1px;
+    classDef view fill:#eefcff,stroke:#00a3a3,stroke-width:1px,stroke-dasharray:3;
+    classDef svc fill:#fff5e6,stroke:#ff9e00,stroke-width:1px;
+</pre>
+  </div>
+
+  <h2>3) Sekwencja żądania (UI → API → DB)</h2>
+  <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as Użytkownik (browser)
+    participant UI as Streamlit UI
+    participant API as FastAPI
+    participant DB as PostgreSQL/Timescale
+    participant MON as Monitoring
+
+    U->>UI: Wejście na subdomenę (HTTPS)
+    UI->>U: Ekran logowania (token/API key)
+    U->>UI: Podanie tokenu
+    UI->>API: GET /indicators?oid=...&fields=hidden_accum_score (Auth)
+    API->>DB: SELECT z at.indicator_snapshot
+    DB-->>API: JSON snapshotów (params, values)
+    API-->>UI: 200 OK (payload)
+    UI-->>U: Wykresy + heatmapa + sygnały
+
+    par Health & Metrics
+      UI->>API: GET /health
+      API-->>UI: 200 OK
+      API->>MON: /metrics (Prometheus scrape)
+    end
+</pre>
+  </div>
+
+  <footer>
+    Wersja HTML wygenerowana automatycznie. Możesz hostować jako GitHub Pages.
+  </footer>
+</body>
+</html>
