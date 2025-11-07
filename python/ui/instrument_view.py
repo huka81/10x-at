@@ -1,14 +1,13 @@
 # instrument_view.py
 from tools.logger import get_logger
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-import markdown
 import pandas as pd
 import plotly.graph_objs as go
 import streamlit as st
 from database import reporting
-# from database.crud import get_profile_for_symbol  # Module not found
-# from tools.utils import format_currency_human_readable  # Module not found
+from database.crud import get_oid_by_symbol, get_br_symbol_by_xtb, get_profile_for_symbol
+from tools.utils import format_currency_human_readable
 from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Set up logging
@@ -22,6 +21,27 @@ recommendation_type_icons = {
     "fundamental": "📊",  # Chart for fundamental analysis
     "technical": "📈",  # Trending up for technical analysis
 }
+        hidden_acum_df = reporting.get_accum_score_points()
+        return hidden_acum_df
+    except Exception as e:
+        logger.error(f"Error loading hidden accumulation data: {e}")
+        return pd.DataFrame()
+
+
+def load_profile_data() -> pd.DataFrame:
+    """
+    Load profile data for instruments with active accumulation setup.
+    
+    Returns:
+        DataFrame with columns: oid, last_ts, xtb_long_name, br_code, branch, 
+        descript, intro_date, volume, capitalization, enterprive_value
+    """
+    try:
+        profile_df = reporting.get_accum_profile_data()
+        return profile_df
+    except Exception as e:
+        logger.error(f"Error loading profile data: {e}")
+        return pd.DataFrame()
 
 
 def load_portfolio_data() -> pd.DataFrame:
