@@ -274,14 +274,18 @@ def create_candlestick_chart(
     decisions_df: pd.DataFrame,
     orders_df: pd.DataFrame,
     close_time_dt: pd.Timestamp = None,
+    accum_df: pd.DataFrame = None,
 ) -> go.Figure:
     """
-    Create a candlestick chart with decision and order markers.
+    Create a candlestick chart with decision, order markers, and accumulation points.
 
     Args:
+        reco: Recommendation dictionary (can be empty)
         quotes_df: DataFrame with quote data
         decisions_df: DataFrame with decision history
         orders_df: DataFrame with order history
+        close_time_dt: Optional close time for the position
+        accum_df: DataFrame with accumulation score points (oid, ts, hidden_accum_score)
 
     Returns:
         Plotly figure object
@@ -661,6 +665,105 @@ def create_candlestick_chart(
                 logger.warning(f"Error processing order marker: {e}")
                 continue
 
+    # Add accumulation score points if available
+    logger.info(f"Processing accumulation points. accum_df is None: {accum_df is None}")
+    if accum_df is not None:
+        logger.info(f"accum_df shape: {accum_df.shape}")
+        logger.info(f"accum_df columns: {accum_df.columns.tolist()}")
+        logger.info(f"accum_df first few rows:\n{accum_df.head()}")
+    
+    if accum_df is not None and not accum_df.empty:
+        logger.info(f"Starting to add {len(accum_df)} accumulation points to chart")
+        try:
+            # Convert timestamp column to datetime if needed
+            accum_df_copy = accum_df.copy()
+            if "ts" in accum_df_copy.columns:
+                logger.info("Converting ts column to datetime")
+                accum_df_copy["ts"] = pd.to_datetime(accum_df_copy["ts"], errors="coerce")
+                
+                # Remove timezone info to match quotes_df (which is tz-naive)
+                if accum_df_copy["ts"].dt.tz is not None:
+                    logger.info("Removing timezone info from accumulation timestamps")
+                    accum_df_copy["ts"] = accum_df_copy["ts"].dt.tz_localize(None)
+                
+                # Filter out any rows with invalid timestamps
+                accum_df_copy = accum_df_copy[accum_df_copy["ts"].notna()]
+                logger.info(f"After filtering invalid timestamps: {len(accum_df_copy)} points remain")
+                
+                if not accum_df_copy.empty:
+                    # Create a color scale based on hidden_accum_score
+                    # Higher scores = more blue/purple, lower scores = more yellow/orange
+                    scores = accum_df_copy["hidden_accum_score"].values
+                    logger.info(f"Score range: min={scores.min():.2f}, max={scores.max():.2f}")
+                    
+                    # Normalize scores to 0-1 range for color mapping
+                    if len(scores) > 0:
+                        min_score = scores.min()
+                        max_score = scores.max()
+                        if max_score > min_score:
+                            normalized_scores = (scores - min_score) / (max_score - min_score)
+                        else:
+                            normalized_scores = [0.5] * len(scores)
+                    else:
+                        normalized_scores = []
+                    
+                    # Create color list: purple/blue for high scores, yellow/orange for low scores
+                    # Using more vibrant colors that stand out
+                    colors = []
+                    for s in normalized_scores:
+                        if s > 0.66:  # High scores - bright blue
+                            colors.append('rgb(0, 100, 255)')
+                        elif s > 0.33:  # Medium scores - bright purple
+                            colors.append('rgb(150, 0, 255)')
+                        else:  # Low scores - bright orange
+                            colors.append('rgb(255, 140, 0)')
+                    
+                    logger.info(f"Color mapping completed. Sample colors: {colors[:5]}")
+                    
+                    # Get close prices at accumulation point timestamps
+                    # We'll try to match timestamps to find the corresponding close price
+                    y_values = []
+                    for idx, ts in enumerate(accum_df_copy["ts"]):
+                        # Find the closest quote timestamp
+                        time_diffs = abs(quotes_df[timestamp_col] - ts)
+                        closest_idx = time_diffs.idxmin()
+                        close_price = quotes_df.loc[closest_idx, "close"]
+                        y_values.append(close_price)
+                        if idx < 3:  # Log first few matches
+                            logger.info(f"Point {idx}: ts={ts}, matched price={close_price:.4f}")
+                    
+                    logger.info(f"Adding trace with {len(y_values)} accumulation points")
+                    fig.add_trace(
+                        go.Scatter(
+                            x=accum_df_copy["ts"],
+                            y=y_values,
+                            mode="markers",
+                            marker=dict(
+                                size=18,  # Increased from 10 to 18 for better visibility
+                                color=colors,
+                                symbol="star",  # Changed to star for better visibility
+                                line=dict(width=2, color="black"),  # Black border for contrast
+                            ),
+                            name="⭐ Punkty akumulacji",
+                            customdata=accum_df_copy["hidden_accum_score"].values,
+                            hovertemplate="<b>🔍 Punkt akumulacji</b><br>"
+                            + "<b>📅 Czas:</b> %{x}<br>"
+                            + "<b>💰 Cena:</b> %{y:.4f}<br>"
+                            + "<b>📊 Wynik akumulacji:</b> %{customdata:.2f}<br>"
+                            + "<extra></extra>",
+                            showlegend=True,
+                        )
+                    )
+                    logger.info("Successfully added accumulation points trace to figure")
+                else:
+                    logger.warning("No valid accumulation points after filtering")
+            else:
+                logger.warning("Column 'ts' not found in accum_df")
+        except Exception as e:
+            logger.error(f"Error adding accumulation points: {e}", exc_info=True)
+    else:
+        logger.info("No accumulation data to display (accum_df is None or empty)")
+
     # Calculate appropriate Y-axis range based on price data and SL/TP levels
     try:
         # Start with price data
@@ -771,35 +874,44 @@ def create_candlestick_chart(
     return fig
 
 
-def show_recommendation_selector() -> int:
+def show_instrument_selector() -> Optional[int]:
     """
-    Display position selector and return selected recommendation_id.
+    Display instrument selector based on profile data and return selected oid.
 
     Returns:
-        int: Selected recommendation_id or None if no positions
+        int: Selected oid or None if no instruments available
     """
-    # Load portfolio data
-    positions_df = load_portfolio_data()
-    if positions_df.empty:
-        st.warning("Brak otwartych pozycji w portfelu.")
+    # Load profile data
+    profile_df = load_profile_data()
+    if profile_df.empty:
+        st.warning("Brak instrumentów z aktywnym setupem akumulacji.")
         return None
 
-    # Prepare data for display
-    show_df, report_cols = prepare_display_dataframe(positions_df)
+    # Initialize session state for selected instrument index
+    if "selected_instrument_index" not in st.session_state:
+        st.session_state.selected_instrument_index = 0
 
-    # Initialize session state for selected position index
-    if "selected_position_index" not in st.session_state:
-        st.session_state.selected_position_index = 0
+    # Ensure selected_instrument_index is within valid range
+    if st.session_state.selected_instrument_index >= len(profile_df):
+        st.session_state.selected_instrument_index = 0
 
-    # Ensure selected_position_index is within valid range
-    if st.session_state.selected_position_index >= len(show_df):
-        st.session_state.selected_position_index = 0
-
-    with st.expander("📊 Wybór pozycji", expanded=True):
-        # Prepare AgGrid-compatible dataframe and preserve the original index
-        grid_df = show_df.drop(columns=["display", "original_positions_index"]).copy()
-        # Add the display index as a column to track row mapping in the grid
-        grid_df["display_index"] = grid_df.index
+    with st.expander("📊 Wybór instrumentu", expanded=True):
+        # Prepare display dataframe
+        display_df = profile_df.copy()
+        display_df["display_index"] = display_df.index
+        
+        # Select columns for display
+        display_columns = ["oid", "xtb_long_name", "br_code", "branch", "last_ts"]
+        grid_df = display_df[display_columns + ["display_index"]].copy()
+        
+        # Rename columns for better display
+        grid_df = grid_df.rename(columns={
+            "oid": "🆔 OID",
+            "xtb_long_name": "📊 Instrument",
+            "br_code": "🔤 Symbol",
+            "branch": "🏢 Branża",
+            "last_ts": "⏰ Ostatni setup"
+        })
 
         # Convert any problematic columns to string for display
         for col in grid_df.columns:
@@ -811,14 +923,11 @@ def show_recommendation_selector() -> int:
         gb.configure_selection(
             "single",
             use_checkbox=False,
-            pre_selected_rows=[st.session_state.selected_position_index],
+            pre_selected_rows=[st.session_state.selected_instrument_index],
         )
         gb.configure_grid_options(domLayout="normal")
-        # Add row styling to make it obvious the rows are clickable
         gb.configure_grid_options(rowStyle={"cursor": "pointer"})
-        # Configure default column settings
         gb.configure_default_column(min_column_width=100)
-        # Hide the display_index column from display
         gb.configure_column("display_index", hide=True)
         grid_options = gb.build()
 
@@ -830,7 +939,7 @@ def show_recommendation_selector() -> int:
             fit_columns_on_grid_load=True,
             height=300,
             allow_unsafe_jscode=True,
-            key="position_grid",
+            key="instrument_grid",
             theme="streamlit",
         )
 
@@ -847,131 +956,108 @@ def show_recommendation_selector() -> int:
 
         # Now safely check if we have selected rows
         if selected_rows and len(selected_rows) > 0:
-            # Get the selected row data
             selected_row_data = selected_rows[0]
 
-            # Use the display_index to find the correct row in show_df
+            # Use the display_index to find the correct row
             if "display_index" in selected_row_data:
                 display_index = int(selected_row_data["display_index"])
-                if display_index != st.session_state.selected_position_index:
-                    st.session_state.selected_position_index = display_index
+                if display_index != st.session_state.selected_instrument_index:
+                    st.session_state.selected_instrument_index = display_index
                     st.rerun()
-            else:
-                # Fallback: find by symbol
-                symbol = selected_row_data.get("symbol", "")
-                # Find the matching row in show_df
-                for i in range(len(show_df)):
-                    if show_df.iloc[i]["symbol"] == symbol:
-                        if i != st.session_state.selected_position_index:
-                            st.session_state.selected_position_index = i
-                            st.rerun()
-                        break
     except Exception as e:
         st.error(f"Error processing selection: {e}")
         logger.exception("Error processing AgGrid selection")
 
-    # Get selected position details
-    selected_display_index = st.session_state.selected_position_index
+    # Get selected instrument details
+    selected_index = st.session_state.selected_instrument_index
 
     # Ensure the index is valid before accessing the dataframe
-    if selected_display_index >= len(show_df):
-        selected_display_index = 0
-        st.session_state.selected_position_index = 0
+    if selected_index >= len(profile_df):
+        selected_index = 0
+        st.session_state.selected_instrument_index = 0
 
-    selected_show_row = show_df.iloc[selected_display_index]
+    selected_row = profile_df.iloc[selected_index]
 
-    # Get the original position index to access the correct row in positions_df
-    original_position_index = selected_show_row["original_positions_index"]
-    selected_row = positions_df.iloc[original_position_index]
-
-    # Return the recommendation_id
-    return int(selected_row["recommendation_id"])
+    # Return the oid
+    return int(selected_row["oid"])
 
 
-def show_instrument_view(recommendation_id: int):
+def show_instrument_view(oid: int):
     """
-    Display instrument view for a specific recommendation.
+    Display instrument view for a specific oid.
 
     Args:
-        recommendation_id: ID of the recommendation to display
+        oid: Object ID of the instrument to display
     """
-    if recommendation_id is None:
-        st.error("Brak recommendation_id do wyświetlenia")
+    if oid is None:
+        st.error("Brak OID do wyświetlenia")
         return
 
-    # Load portfolio data and filter by recommendation_id
-    positions_df = load_portfolio_data()
-    if positions_df.empty:
-        st.warning("Brak otwartych pozycji w portfelu.")
+    # Load profile data and filter by oid
+    profile_df = load_profile_data()
+    if profile_df.empty:
+        st.warning("Brak instrumentów z aktywnym setupem akumulacji.")
         return
 
-    # Filter positions to only show the specific recommendation
-    filtered_positions = positions_df[
-        positions_df["recommendation_id"] == recommendation_id
-    ]
+    # Filter to get the specific instrument
+    filtered_profile = profile_df[profile_df["oid"] == oid]
 
-    if filtered_positions.empty:
-        st.error(f"Nie znaleziono pozycji dla rekomendacji ID: {recommendation_id}")
-        st.info("Sprawdź czy rekomendacja istnieje lub czy ma otwarte pozycje.")
+    if filtered_profile.empty:
+        st.error(f"Nie znaleziono instrumentu dla OID: {oid}")
         return
 
-    # Use the first (and likely only) position for this recommendation
-    selected_row = filtered_positions.iloc[0]
+    # Get the instrument profile
+    instrument_profile = filtered_profile.iloc[0]
 
-    # Show info about the recommendation being displayed
-    st.info(f"📌 Wyświetlanie szczegółów dla rekomendacji ID: **{recommendation_id}**")
+    # Show info about the instrument being displayed
+    st.info(f"📌 Wyświetlanie szczegółów dla instrumentu: **{instrument_profile['xtb_long_name']}** (OID: {oid})")
 
-    # Extract position details
-    xtb_instrument_id = int(selected_row["xtb_instrument_id"])
-    symbol = selected_row["symbol"]
-    br_symbol = selected_row["br_symbol"]
-    full_name = selected_row["full_name"]
-
-    # Display position summary
-    # display_position_summary(selected_row)
+    # Extract instrument details
+    br_code = instrument_profile.get("br_code", "N/A")
+    xtb_long_name = instrument_profile.get("xtb_long_name", "N/A")
+    branch = instrument_profile.get("branch", "N/A")
+    
+    # Display instrument summary
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(90deg, #f0f2f6, #ffffff); 
+                    padding: 20px; 
+                    border-radius: 10px; 
+                    border-left: 5px solid #1f77b4;
+                    margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #1f77b4;">
+                📊 {xtb_long_name}
+            </h2>
+            <p style="margin: 5px 0; color: #666; font-size: 14px;">
+                <strong>Symbol:</strong> {br_code} | <strong>Branża:</strong> {branch} | <strong>OID:</strong> {oid}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Candlestick chart section
-    st.subheader("Notowania i operacje")
+    st.subheader("Notowania i punkty akumulacji")
 
-    # Load data for charts
-    recommendation_ts = selected_row.get("recommendation_ts")
-    open_time_dt = selected_row.get("open_time_dt")
-    close_time_dt = selected_row.get("close_time_dt")
-
-    # Handle NaT and None values safely
-    valid_recommendation_ts = None
-    if recommendation_ts is not None and pd.notna(recommendation_ts):
-        valid_recommendation_ts = recommendation_ts
-
-    valid_open_time_dt = None
-    if open_time_dt is not None and pd.notna(open_time_dt):
-        valid_open_time_dt = open_time_dt
-
-    # Use the earliest valid timestamp, or fallback to 7 days ago
-    earliest_timestamp = None
-    if valid_recommendation_ts and valid_open_time_dt:
-        earliest_timestamp = min(valid_recommendation_ts, valid_open_time_dt)
-    elif valid_recommendation_ts:
-        earliest_timestamp = valid_recommendation_ts
-    elif valid_open_time_dt:
-        earliest_timestamp = valid_open_time_dt
-    else:
-        earliest_timestamp = pd.Timestamp.now() - pd.Timedelta(days=7)
-
-    # Calculate days back with safety check
-    days_back = (
-        int((pd.Timestamp.now() - earliest_timestamp).total_seconds() / 60 / 60 / 24)
-        + 5
-    )  # Add 5 days buffer for better visibility
-
-    # Ensure minimum days_back value
-    days_back = max(days_back, 7)  # At least 7 days
-    quotes_df = reporting.get_quotes(
-        xtb_instrument_id=xtb_instrument_id, days_back=days_back
-    )
-    decisions_df = reporting.get_decision_history(recommendation_id, xtb_instrument_id)
-    orders_df = reporting.get_orders(xtb_instrument_id, recommendation_id)
-    reco = reporting.get_recommendation(recommendation_id, xtb_instrument_id)
+    # Load data for charts - use a reasonable lookback period
+    days_back = 30  # Default to 30 days for accumulation analysis
+    
+    logger.info(f"Loading quotes for instrument: {br_code}, oid: {oid}, days_back: {days_back}")
+    # Need to get xtb_instrument_id from oid
+    # For now, we'll use br_symbol to get quotes
+    quotes_df = reporting.get_quotes(br_symbol=br_code, days_back=days_back)
+    logger.info(f"Loaded {len(quotes_df)} quote records")
+    
+    # Load accumulation points
+    logger.info("Loading all accumulation data")
+    accum_df = load_hidden_acum_df()
+    logger.info(f"Loaded {len(accum_df)} total accumulation records")
+    
+    # Filter accumulation points for this instrument
+    instrument_accum_df = accum_df[accum_df["oid"] == oid] if not accum_df.empty else pd.DataFrame()
+    logger.info(f"Filtered to {len(instrument_accum_df)} accumulation points for oid {oid}")
+    if not instrument_accum_df.empty:
+        logger.info(f"Sample accumulation data:\n{instrument_accum_df.head()}")
 
     if quotes_df.empty:
         st.warning("Brak notowań instrumentu.")
@@ -979,7 +1065,12 @@ def show_instrument_view(recommendation_id: int):
         # Create and display chart
         try:
             fig = create_candlestick_chart(
-                reco, quotes_df, decisions_df, orders_df, close_time_dt
+                reco={},  # No recommendation data needed
+                quotes_df=quotes_df,
+                decisions_df=pd.DataFrame(),  # No decisions
+                orders_df=pd.DataFrame(),  # No orders
+                close_time_dt=None,
+                accum_df=instrument_accum_df  # Pass accumulation points
             )
             st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
@@ -989,37 +1080,37 @@ def show_instrument_view(recommendation_id: int):
 
 def show_instrument_management_view():
     """
-    Combined view that shows position selector and instrument details.
+    Combined view that shows instrument selector and instrument details.
     This is the main entry point for the instrument management interface.
     """
     # App title
-    st.title("Panel inwestora")
+    st.title("Panel analizy instrumentów")
 
-    # Check if recommendation_id is provided via URL
+    # Check if oid is provided via URL
     query_params = st.query_params
-    url_recommendation_id = None
+    url_oid = None
 
-    if "recommendation_id" in query_params:
+    if "oid" in query_params:
         try:
-            url_recommendation_id = int(query_params["recommendation_id"])
-            # If URL has recommendation_id, go directly to instrument view
-            show_instrument_view(url_recommendation_id)
+            url_oid = int(query_params["oid"])
+            # If URL has oid, go directly to instrument view
+            show_instrument_view(url_oid)
             return
         except (ValueError, TypeError):
-            st.error("Nieprawidłowy format recommendation_id w URL")
+            st.error("Nieprawidłowy format OID w URL")
             return
 
-    # Check if recommendation_id is provided via session state (from portfolio view)
-    if "selected_recommendation_id" in st.session_state:
-        selected_rec_id = st.session_state.selected_recommendation_id
+    # Check if oid is provided via session state
+    if "selected_oid" in st.session_state:
+        selected_oid = st.session_state.selected_oid
         # Clear the session state to prevent repeated redirects
-        del st.session_state.selected_recommendation_id
-        show_instrument_view(selected_rec_id)
+        del st.session_state.selected_oid
+        show_instrument_view(selected_oid)
         return
 
     # Normal flow: show selector and then details
-    selected_recommendation_id = show_recommendation_selector()
+    selected_oid = show_instrument_selector()
 
-    if selected_recommendation_id is not None:
+    if selected_oid is not None:
         st.divider()
-        show_instrument_view(selected_recommendation_id)
+        show_instrument_view(selected_oid)
