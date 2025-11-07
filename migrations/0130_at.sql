@@ -61,107 +61,96 @@ WINDOW w AS (PARTITION BY oid ORDER BY ts ROWS BETWEEN 19 PRECEDING AND CURRENT 
 
 CREATE OR REPLACE VIEW at.v_hidden_20 AS
 WITH base AS (
-  SELECT *,
+  SELECT * ,
+         -- okna / prymitywy
          up_vol / NULLIF(up_vol + down_vol, 0) AS c2_uvd,
-         (obv - LAG(obv,10) OVER w) AS obv_slope,
-         STDDEV_SAMP(obv) OVER w AS obv_sd,
-         MAX(high) OVER w AS box_hi,
-         MIN(low)  OVER w AS box_lo
+         (obv - LAG(obv,10) OVER w)            AS obv_slope,
+         STDDEV_SAMP(obv) OVER w               AS obv_sd,
+         MAX(high) OVER w                      AS box_hi,
+         MIN(low)  OVER w                      AS box_lo
   FROM at.v_base_20
   WINDOW w AS (PARTITION BY oid ORDER BY ts ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
 ),
-base_with_lag AS (
+lagged AS (
   SELECT *,
          LAG(box_lo) OVER (PARTITION BY oid ORDER BY ts) AS prev_box_lo
   FROM base
 ),
-base_with_spring AS (
+spring_raw AS (
   SELECT *,
          CASE WHEN low < prev_box_lo AND close > prev_box_lo
               THEN 0.2 ELSE 0 END AS spring_signal
-  FROM base_with_lag
-)
-SELECT
-  oid, ts, open, high, low, close, volume,
-  box_hi, box_lo,
-  -- C1: kontrakcja zmienności
-  CASE 
-    WHEN atr_20 IS NULL OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
-    ELSE 1.0 / (1.0 + EXP(((atr_20 / NULLIF(sma_20,0))
-      - AVG(atr_20 / NULLIF(sma_20,0)) OVER w)
-      / GREATEST(STDDEV_SAMP(atr_20 / NULLIF(sma_20,0)) OVER w, 1e-9)))
-  END AS c1_vol_comp,
-
-  -- C2: up/down volume
-  COALESCE(c2_uvd, 0.5) AS c2_uvd,
-
-  -- C3: OBV slope + flat price
-  CASE
-    WHEN obv_sd IS NULL OR obv_sd = 0 OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
-    WHEN obv_slope IS NULL THEN 0.5
-    ELSE (1.0 / (1.0 + EXP(-COALESCE(obv_slope,0) / GREATEST(COALESCE(obv_sd,1e-9), 1e-9)))) * 0.7
-         + (1.0 - COALESCE(box_hi - box_lo, 0) / GREATEST(COALESCE(sma_20,1e-9), 1e-9)) * 0.3
-  END AS c3_money_flow,
-
-  -- C4: no-supply candles
-  AVG(
-    CASE WHEN close < open
-       AND (high - low) < (spread_avg - 0.5*COALESCE(spread_sd,0))
-       AND volume < COALESCE(vol_avg,0) * 0.8 THEN 1 ELSE 0 END
-  ) OVER w AS c4_no_supply,
-
-  -- C5: spring
-  MAX(spring_signal) OVER (PARTITION BY oid ORDER BY ts ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS c5_spring,
-
-  -- SCORE
-  100 * (
-    0.25 * CASE 
+  FROM lagged
+),
+-- 5 składowych (C1..C5) jako czytelne kolumny
+components AS (
+  SELECT
+    *,
+    -- C1: kontrakcja zmienności (logistic, z zabezpieczeniami)
+    CASE 
       WHEN atr_20 IS NULL OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
       ELSE 1.0 / (1.0 + EXP(((atr_20 / NULLIF(sma_20,0))
         - AVG(atr_20 / NULLIF(sma_20,0)) OVER w)
         / GREATEST(STDDEV_SAMP(atr_20 / NULLIF(sma_20,0)) OVER w, 1e-9)))
-    END
-    + 0.25 * COALESCE(c2_uvd, 0.5)
-    + 0.30 * CASE
-        WHEN obv_sd IS NULL OR obv_sd = 0 OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
-        WHEN obv_slope IS NULL THEN 0.5
-        ELSE (1.0 / (1.0 + EXP(-COALESCE(obv_slope,0) / GREATEST(COALESCE(obv_sd,1e-9), 1e-9)))) * 0.7
-             + (1.0 - COALESCE(box_hi - box_lo, 0) / GREATEST(COALESCE(sma_20,1e-9), 1e-9)) * 0.3
-      END
-    + 0.15 * AVG(CASE WHEN close < open
-       AND (high - low) < (spread_avg - 0.5*COALESCE(spread_sd,0))
-       AND volume < COALESCE(vol_avg,0) * 0.8 THEN 1 ELSE 0 END) OVER w
-    + 0.05 * MAX(spring_signal) OVER (PARTITION BY oid ORDER BY ts ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
-  ) AS hidden_accum_score,
+    END AS c1_vol_comp,
 
+    -- C3: OBV slope + flat price (mieszanka 0.7/0.3)
+    CASE
+      WHEN obv_sd IS NULL OR obv_sd = 0 OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
+      WHEN obv_slope IS NULL THEN 0.5
+      ELSE (1.0 / (1.0 + EXP(-COALESCE(obv_slope,0) / GREATEST(COALESCE(obv_sd,1e-9), 1e-9)))) * 0.7
+           + (1.0 - COALESCE(box_hi - box_lo, 0) / GREATEST(COALESCE(sma_20,1e-9), 1e-9)) * 0.3
+    END AS c3_money_flow,
+
+    -- C4: no-supply (rolling avg z okna)
+    AVG(
+      CASE WHEN close < open
+         AND (high - low) < (spread_avg - 0.5*COALESCE(spread_sd,0))
+         AND volume < COALESCE(vol_avg,0) * 0.8 THEN 1 ELSE 0 END
+    ) OVER w AS c4_no_supply,
+
+    -- C5: spring (max w M=5 ostatnich)
+    MAX(spring_signal) OVER (PARTITION BY oid ORDER BY ts ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS c5_spring
+  FROM spring_raw
+  WINDOW w AS (PARTITION BY oid ORDER BY ts ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
+),
+scored AS (
+  SELECT
+    *,
+    100 * (
+      0.25 * c1_vol_comp
+      + 0.25 * COALESCE(c2_uvd, 0.5)
+      + 0.30 * c3_money_flow
+      + 0.15 * c4_no_supply
+      + 0.05 * c5_spring
+    ) AS hidden_accum_score
+  FROM components
+)
+SELECT
+  -- OHLCV + box
+  oid, ts, open, high, low, close, volume,
+  box_hi, box_lo, ((box_hi + box_lo)/2.0) AS box_mid,
+
+  -- składowe 0..1 (łatwe debugowanie)
+  c1_vol_comp,
+  COALESCE(c2_uvd, 0.5) AS c2_uvd,
+  c3_money_flow,
+  c4_no_supply,
+  c5_spring,
+
+  -- score 0..100
+  hidden_accum_score,
+
+  -- setup (jak u Ciebie: próg 70 + pozycja w boxie + brak wybicia)
   CASE
-    WHEN
-      100 * (
-        0.25 * CASE 
-          WHEN atr_20 IS NULL OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
-          ELSE 1.0 / (1.0 + EXP(((atr_20 / NULLIF(sma_20,0))
-            - AVG(atr_20 / NULLIF(sma_20,0)) OVER w)
-            / GREATEST(STDDEV_SAMP(atr_20 / NULLIF(sma_20,0)) OVER w, 1e-9)))
-        END
-        + 0.25 * COALESCE(c2_uvd, 0.5)
-        + 0.30 * CASE
-            WHEN obv_sd IS NULL OR obv_sd = 0 OR sma_20 IS NULL OR sma_20 = 0 THEN 0.5
-            WHEN obv_slope IS NULL THEN 0.5
-            ELSE (1.0 / (1.0 + EXP(-COALESCE(obv_slope,0) / GREATEST(COALESCE(obv_sd,1e-9), 1e-9)))) * 0.7
-                 + (1.0 - COALESCE(box_hi - box_lo, 0) / GREATEST(COALESCE(sma_20,1e-9), 1e-9)) * 0.3
-          END
-        + 0.15 * AVG(CASE WHEN close < open
-           AND (high - low) < (spread_avg - 0.5*COALESCE(spread_sd,0))
-           AND volume < COALESCE(vol_avg,0) * 0.8 THEN 1 ELSE 0 END) OVER w
-        + 0.05 * MAX(spring_signal) OVER (PARTITION BY oid ORDER BY ts ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
-      ) >= 70
-      AND close > ((MAX(high) OVER w + MIN(low) OVER w)/2)
-      AND high < MAX(high) OVER w
+    WHEN hidden_accum_score >= 70
+     AND close > ((MAX(high) OVER w + MIN(low) OVER w)/2.0)
+     AND high  <  MAX(high) OVER w
     THEN TRUE ELSE FALSE
   END AS hidden_accum_setup
-
-FROM base_with_spring
+FROM scored
 WINDOW w AS (PARTITION BY oid ORDER BY ts ROWS BETWEEN 19 PRECEDING AND CURRENT ROW);
+
 
 
 CREATE TABLE IF NOT EXISTS at.indicator_snapshot (
@@ -176,25 +165,25 @@ CREATE TABLE IF NOT EXISTS at.indicator_snapshot (
 );
 
 
-INSERT INTO at.indicator_snapshot (oid, timeframe, ts, params, values)
-SELECT
-  oid,
-  '1m' AS timeframe,
-  ts,
-  '{"N":20,"weights":[0.25,0.25,0.30,0.15,0.05]}'::jsonb AS params,
-  jsonb_build_object(
-    'hidden_accum_score', hidden_accum_score,
-    'hidden_accum_setup', hidden_accum_setup
-  ) AS values
-FROM at.v_hidden_20
-WHERE ts > COALESCE(
-  (SELECT MAX(ts) FROM at.indicator_snapshot s WHERE s.oid = v_hidden_20.oid AND s.timeframe = '1m'),
-  '1900-01-01'::timestamptz
-)
-ON CONFLICT (oid, timeframe, ts)
-DO UPDATE SET
-  values = EXCLUDED.values,
-  calc_at = now();
+-- INSERT INTO at.indicator_snapshot (oid, timeframe, ts, params, values)
+-- SELECT
+--   oid,
+--   '1m' AS timeframe,
+--   ts,
+--   '{"N":20,"weights":[0.25,0.25,0.30,0.15,0.05]}'::jsonb AS params,
+--   jsonb_build_object(
+--     'hidden_accum_score', hidden_accum_score,
+--     'hidden_accum_setup', hidden_accum_setup
+--   ) AS values
+-- FROM at.v_hidden_20
+-- WHERE ts > COALESCE(
+--   (SELECT MAX(ts) FROM at.indicator_snapshot s WHERE s.oid = v_hidden_20.oid AND s.timeframe = '1m'),
+--   '1900-01-01'::timestamptz
+-- )
+-- ON CONFLICT (oid, timeframe, ts)
+-- DO UPDATE SET
+--   values = EXCLUDED.values,
+--   calc_at = now();
 
 
 
