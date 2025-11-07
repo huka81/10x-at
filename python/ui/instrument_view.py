@@ -21,6 +21,15 @@ recommendation_type_icons = {
     "fundamental": "📊",  # Chart for fundamental analysis
     "technical": "📈",  # Trending up for technical analysis
 }
+
+def load_hidden_acum_df() -> pd.DataFrame:
+    """
+    Load hidden accumulation data from the database.
+
+    Returns:
+        DataFrame containing hidden accumulation data or empty DataFrame if none found
+    """
+    try:
         hidden_acum_df = reporting.get_accum_score_points()
         return hidden_acum_df
     except Exception as e:
