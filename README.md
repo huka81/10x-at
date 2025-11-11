@@ -1,20 +1,53 @@
-# 10xDevs.pl - Python/Streamlit Banking Application
+# 🧠 10x-AT — moduł analizy technicznej dla AIvestor
 
 ![](./docs/banner.png)
 
-Warmup repository for [10xDevs.pl](https://10xdevs.pl) - refactored to Python/Streamlit/PostgreSQL
+**10x-AT** to niezależny, modularny komponent systemu **[AIvestor.pl](https://aivestor.pl)**, który realizuje wybrane aspekty **analizy technicznej rynków finansowych**.  
+Projekt został zaprojektowany tak, by można go było wdrożyć zarówno jako samodzielny mikroserwis, jak i jako integralny fragment ekosystemu AIvestor.
 
-## Stack
+## 🌐 Deployment
 
-- **Language:** Python 3.11+
-- **Frontend:** Streamlit
-- **Database:** PostgreSQL
-- **Migrations:** Yoyo Migrations
-- **Testing:** Pytest
+Aktualna wersja modułu jest dostępna publicznie pod adresem:  
+👉 **[https://10x.aivestor-ui.pl/](https://10x.aivestor-ui.pl/)**
+
+Serwis jest zbudowany jako **webowy interfejs analizy technicznej (AT)**, który:
+- wizualizuje dane giełdowe w oparciu o autorskie algorytmy,
+- integruje się z rdzeniem AIvestor do analizy trendów, wolumenu i sygnałów,
+- umożliwia eksperymenty z nowymi wskaźnikami i modelami.
+
+## 🧩 Kontekst projektu
+
+Projekt **10x-AT** stanowi rozszerzenie głównego systemu **[AIvestor.pl](https://aivestor.pl)** — platformy opartej o sztuczną inteligencję, wspomagającej analizę inwestycyjną i automatyzację decyzji rynkowych.
+
+Ten komponent koncentruje się na **analizie technicznej (Technical Analysis)**, w szczególności:
+- przetwarzaniu i agregacji danych giełdowych (candlestick, volume, OBV, VIX),
+- wykrywaniu formacji oraz anomalii wolumenowych,
+- generowaniu sygnałów „spring" i „box pattern",
+- detekcji ukrytej akumulacji (hidden accumulation),
+- wizualizacji wyników w sposób interaktywny.
+
+## ⚙️ Stack technologiczny
+
+| Obszar | Technologia |
+|--------|--------------|
+| **Backend** | Python 3.11+, PostgreSQL (analiza danych, widoki analityczne) |
+| **Frontend** | Streamlit (interaktywne wizualizacje), Plotly (wykresy) |
+| **Baza danych** | PostgreSQL 14+ z zaawansowanymi widokami SQL |
+| **Migracje** | Yoyo Migrations |
+| **Testing** | Pytest |
+| **Integracja** | API z platformą [AIvestor.pl](https://aivestor.pl) |
+| **Deployment** | Docker / Nginx / CI-CD |
+
+## 🚀 Cele projektu
+
+- 🧩 stworzenie elastycznego modułu AT możliwego do integracji z różnymi źródłami danych,  
+- 📊 wizualizacja i testowanie autorskich wskaźników w czasie rzeczywistym,  
+- 🧠 umożliwienie połączenia analiz technicznych z warstwą AI / Machine Learning AIvestora,  
+- 🌍 wdrożenie produkcyjne jako część **AIvestor Cloud Infrastructure**.
 
 ## Quick Links
 
-- [Platform szkoleniowa](http://bravecourses.circle.so)
+- [Platform szkoleniowa 10xDevs.pl](https://10xdevs.pl)
 
 ## AI Tooling
 
@@ -26,48 +59,48 @@ Warmup repository for [10xDevs.pl](https://10xdevs.pl) - refactored to Python/St
 
 ## Prerequisites
 
-- Python 3.11 or higher
-- PostgreSQL 14+ running locally or remote
-- pip or pipenv for dependency management
+- Python 3.11 lub wyższy
+- PostgreSQL 14+ (lokalnie lub zdalnie)
+- pip do zarządzania zależnościami
 
 ## Installation
 
-1. **Install Python dependencies:**
+1. **Instalacja zależności Python:**
 ```bash
 pip install -r requirements.txt
 ```
 
-2. **Configure database:**
-   - Copy `.env.example` to `.env`
-   - Update database credentials in `.env`
+2. **Konfiguracja bazy danych:**
+   - Utwórz plik `.env` na podstawie konfiguracji środowiskowej
+   - Zaktualizuj dane dostępowe do PostgreSQL
 
-3. **Create PostgreSQL database:**
+3. **Utworzenie bazy danych PostgreSQL:**
 ```bash
-createdb banking_app
+createdb aivestor_at
 ```
 
-4. **Run migrations:**
+4. **Uruchomienie migracji:**
 ```bash
 yoyo apply --config yoyo.ini
 ```
 
 ## Running the Application
 
-Start the Streamlit application:
+Uruchomienie aplikacji Streamlit:
 ```bash
-streamlit run app.py
+streamlit run python/ui/main.py
 ```
 
-The application will be available at http://localhost:8501
+Aplikacja będzie dostępna pod adresem http://localhost:8501
 
 ## Running Tests
 
-Run all tests with pytest:
+Uruchomienie wszystkich testów:
 ```bash
 pytest
 ```
 
-Run with coverage:
+Testy z pokryciem kodu:
 ```bash
 pytest --cov=. --cov-report=html
 ```
@@ -75,97 +108,191 @@ pytest --cov=. --cov-report=html
 ## Project Structure
 
 ```
-├── app.py                    # Main Streamlit application
-├── banking/                  # Banking domain logic
-│   ├── banking.py           # Core business logic
-│   ├── types.py             # Type definitions
-│   └── test_banking.py      # Domain tests
-├── db/                       # Database layer
-│   ├── connection.py        # PostgreSQL connection
-│   ├── models.py            # Data models
-│   └── crud.py              # CRUD operations
-├── migrations/               # Yoyo migration scripts
-│   ├── 0001_initial_schema.py
-│   └── 0002_sample_data.py
-├── .streamlit/              # Streamlit configuration
-├── requirements.txt         # Python dependencies
-├── pyproject.toml          # Project metadata
-└── yoyo.ini                # Migration configuration
+├── python/                   # Kod źródłowy Python
+│   ├── config/              # Konfiguracja globalna
+│   │   └── globals.py       # Stałe konfiguracyjne
+│   ├── database/            # Warstwa dostępu do danych
+│   │   ├── crud.py          # Operacje CRUD
+│   │   ├── reporting.py     # Raporty i agregacje
+│   │   └── users.py         # Zarządzanie użytkownikami
+│   ├── etl/                 # Procesy ETL
+│   │   └── calc_accum.py    # Kalkulacja wskaźników akumulacji
+│   ├── tools/               # Narzędzia pomocnicze
+│   │   ├── logger.py        # System logowania
+│   │   ├── utils.py         # Funkcje pomocnicze
+│   │   └── encryption.py    # Szyfrowanie danych
+│   └── ui/                  # Interfejs użytkownika Streamlit
+│       ├── main.py          # Główny punkt wejścia
+│       ├── auth.py          # Autoryzacja użytkowników
+│       ├── instrument_view.py  # Widok instrumentów
+│       └── user_management.py  # Zarządzanie użytkownikami
+├── migrations/              # Skrypty migracji Yoyo
+│   ├── 0010_create_schemas.sql    # Schematy bazy danych
+│   ├── 0030_create_trans_tables.sql  # Tabele transakcyjne
+│   ├── 0110_create_user_config.sql   # Konfiguracja użytkowników
+│   └── 0130_at.sql                   # Widoki analizy technicznej
+├── tests/                   # Testy jednostkowe
+│   ├── test_db.py          # Testy bazy danych
+│   └── test_users.py       # Testy użytkowników
+├── charts/                  # Diagramy i specyfikacje
+├── docs/                    # Dokumentacja statyczna
+├── logs/                    # Logi aplikacji
+├── requirements.txt         # Zależności Python
+├── pyproject.toml          # Metadane projektu
+└── yoyo.ini                # Konfiguracja migracji
 ```
 
 ## Exercises
 
-Test AI-assisted development with these tasks:
+Ćwiczenia do rozwoju umiejętności AI-assisted development:
 
-1. **Banking System Implementation** - Implement banking operations based on specs and tests
-2. **Test Analysis** - Analyze test coverage against specifications
-3. **Mermaid Diagrams** - Generate diagrams from `/charts/request.md`
-4. **Custom AI Behavior** - Modify AI behavior with custom rules
-
-## Database Management
-
-### Migration Commands
-
-```bash
-# Apply all pending migrations
-yoyo apply
-
-# Rollback last migration
-yoyo rollback
-
-# Check migration status
-yoyo list
-
-# Create new migration
-yoyo new -m "Description of changes"
-```
-
-### Database Schema
-
-**Accounts Table:**
-- `id` - Primary key
-- `account_number` - Unique account identifier
-- `owner_name` - Account owner name
-- `balance` - Account balance
-- `currency` - Currency code (USD, EUR, etc.)
-- `created_at`, `updated_at` - Timestamps
-
-**Transactions Table:**
-- `id` - Primary key
-- `account_id` - Foreign key to accounts
-- `transaction_type` - Type: deposit, withdrawal, transfer
-- `amount` - Transaction amount
-- `description` - Optional description
-- `created_at` - Timestamp
+1. **Analiza techniczna** - Eksperymentowanie z nowymi wskaźnikami i algorytmami detekcji
+2. **Analiza pokrycia testami** - Rozbudowa testów dla modułów analitycznych
+3. **Diagramy Mermaid** - Generowanie diagramów z `/charts/request.md`
+4. **Własne reguły AI** - Modyfikacja zachowań AI poprzez custom rules
 
 ## Features
 
-- ✅ Account creation with validation
-- ✅ Withdrawal processing with business rules
-- ✅ Transaction history tracking
-- ✅ Real-time balance updates
-- ✅ Multi-currency support
-- ✅ PostgreSQL persistence
-- ✅ Streamlit interactive UI
+- ✅ Analiza hidden accumulation (ukryta akumulacja)
+- ✅ Wykrywanie formacji box pattern i spring signals
+- ✅ Wieloskładnikowy scoring (C1-C5: volatility compression, volume ratio, OBV flow, no-supply, spring)
+- ✅ Interaktywne wykresy Plotly z OHLCV
+- ✅ System zarządzania użytkownikami z autentykacją
+- ✅ Widok instrumentów z profilem spółek (kapitalizacja, branża, opis)
+- ✅ Integracja z danymi BiznesRadar i XTB
+- ✅ Snapshoty wskaźników z timestampami
+- ✅ PostgreSQL z zaawansowanymi widokami analitycznymi
+- ✅ ETL dla kalkulacji akumulacji
+- ✅ System logowania i monitoringu
+- ✅ Streamlit responsive UI
+
+## Architektura analizy technicznej
+
+### Widoki analityczne (schemat `at`)
+
+**v_candles_1m** - Podstawowe dane OHLCV w interwale 1-minutowym
+
+**v_base_20** - Okno 20-periodowe z podstawowymi wskaźnikami:
+- ATR (Average True Range) - zmienność
+- SMA/EMA - średnie kroczące
+- OBV (On-Balance Volume) - przepływ wolumenu
+- Up/Down volume ratio - proporcje wzrostów/spadków
+- Spread statistics - analiza spreadów
+
+**v_hidden_20** - Zaawansowana detekcja ukrytej akumulacji:
+- **C1 (25%)**: Volatility compression (kontrakcja zmienności)
+- **C2 (25%)**: Up/Down volume ratio (dominacja up volume)
+- **C3 (30%)**: Money flow (OBV slope + flat price)
+- **C4 (15%)**: No-supply signals (brak podaży)
+- **C5 (5%)**: Spring detection (wybicie w dół i odwrót)
+- **hidden_accum_score**: Kompozytowy wynik 0-100
+- **hidden_accum_setup**: Boolean flag dla setupów >70 score
+
+**indicator_snapshot** - Tabela z historycznymi snapshotami wskaźników
+
+### Proces ETL
+
+Moduł `python/etl/calc_accum.py` odpowiada za:
+- Inkrementalne updaty snapshots wskaźników
+- Wywołanie stored procedures dla kalkulacji
+- Logging i monitoring procesu
+
+
+## Database Management
+
+### Struktura schematów
+
+- **raw** - Surowe dane z zewnętrznych źródeł (XTB, BiznesRadar)
+- **trans** - Dane transakcyjne (quotes, session calendar)
+- **at** - Analiza techniczna (widoki, snapshots, users)
+
+### Komendy migracji
+
+```bash
+# Zastosuj wszystkie oczekujące migracje
+yoyo apply --config yoyo.ini
+
+# Cofnij ostatnią migrację
+yoyo rollback
+
+# Sprawdź status migracji
+yoyo list
+
+# Utwórz nową migrację
+yoyo new -m "Opis zmian"
+```
+
+### Kluczowe tabele
+
+**at.users** - Użytkownicy systemu:
+- `id` - Primary key
+- `username` - Unikalna nazwa użytkownika
+- `password_hash` - Zahashowane hasło
+- `email` - Adres email
+- `is_active` - Status aktywności
+- `created_at`, `updated_at` - Timestampy
+
+**trans.br_quotes** - Notowania giełdowe:
+- `oid` - Object ID (identyfikator instrumentu)
+- `ts_dt` - Timestamp notowania
+- `open`, `high`, `low`, `close` - OHLC
+- `volume`, `amount` - Wolumen i wartość
+- `grain` - Interwał (1m, 5m, 1h, etc.)
+
+**at.indicator_snapshot** - Snapshoty wskaźników:
+- `oid` - Identyfikator instrumentu
+- `ts` - Timestamp snapshotu
+- `indicator_name` - Nazwa wskaźnika
+- `values` - JSONB z wartościami wskaźników
 
 ## Development
 
 ### Code Quality
 
-Format code with Black:
+Formatowanie kodem Black:
 ```bash
 black .
 ```
 
-Lint with Flake8:
+Linting z Flake8:
 ```bash
 flake8 .
 ```
 
-Type check with MyPy:
+Type checking z MyPy:
 ```bash
 mypy .
 ```
+
+### Watch mode dla testów
+```bash
+pytest --watch
+# lub
+ptw
+```
+
+## Integracja z AIvestor
+
+Moduł 10x-AT integruje się z platformą AIvestor poprzez:
+- Wspólną bazę danych PostgreSQL
+- API endpoints dla wymiany sygnałów
+- Zunifikowany model danych dla instrumentów finansowych
+- Współdzielone mechanizmy autentykacji
+
+
+## Roadmap
+
+- 🔄 Rozbudowa wskaźników AT (RSI, MACD, Bollinger Bands)
+- 🤖 Integracja z ML models dla predykcji
+- 📱 Mobile-responsive dashboard
+- 🔔 System alertów dla setupów akumulacji
+- 📊 Backtesting engine dla strategii
+- 🌐 API REST dla zewnętrznych integracji
+- 📈 Real-time streaming quotes
+
+## Contributing
+
+Projekt jest częścią ekosystemu [AIvestor.pl](https://aivestor.pl) i [10xDevs.pl](https://10xdevs.pl).
 
 ## License
 
