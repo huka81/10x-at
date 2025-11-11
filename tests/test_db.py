@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from database import get_db, get_db_engine, get_session
+from python.database import get_db, get_db_engine, get_session
 
 
 class TestDatabaseConnection:
