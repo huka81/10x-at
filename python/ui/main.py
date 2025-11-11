@@ -7,7 +7,8 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import streamlit as st
-from ui.instrument_view import show_instrument_management_view, show_instrument_view
+from ui.instrument_view import show_instrument_management_view
+from ui.user_management import show_user_management_view
 from ui.auth import (
     check_authentication,
     show_login_page,
@@ -17,7 +18,7 @@ from ui.auth import (
 
 # Configure page
 st.set_page_config(
-    page_title="AIVestor System",
+    page_title="AIVestor (10xDev)",
     layout="wide",
     page_icon="📈",
     initial_sidebar_state="expanded",
@@ -40,6 +41,11 @@ else:
             "description": "Zarządzaj portfelem instrumentów",
             "icon": "📊",
         },
+        "👥 Użytkownicy": {
+            "function": show_user_management_view,
+            "description": "Zarządzanie użytkownikami",
+            "icon": "👥",
+        },
     }
 
     # Sidebar with modern design
@@ -56,7 +62,7 @@ else:
             color: white;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         ">
-            <h2 style="margin: 0; font-size: 24px;">📈 AIVestor</h2>
+            <h2 style="margin: 0; font-size: 24px;">📈 AIVestor (10xDev)</h2>
             <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Autonomous Trading System</p>
         </div>
         """,

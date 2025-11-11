@@ -9,7 +9,7 @@ from tools.logger import get_logger
 logger = get_logger(__name__)
 
 # Database table constant
-USERS_TABLE = "trans.users"
+USERS_TABLE = "at.users"
 
 
 class AuthenticationError(Exception):

@@ -17,7 +17,7 @@ def show_login_page():
         st.markdown(
             """
         <div style="text-align: center; margin-bottom: 30px;">
-            <h1>🔐 AIVestor</h1>
+            <h1>🔐 AIVestor - 10xDev</h1>
             <p style="color: #666; font-size: 16px;">Zaloguj się do swojego konta</p>
         </div>
         """,
@@ -88,7 +88,7 @@ def show_login_page():
         st.markdown("---")
         st.markdown(
             "<p style='text-align: center; color: #666; font-size: 12px;'>"
-            "© 2025 AIVestor System | Bezpieczne logowanie"
+            "© 2025 AIVestor (10xDev) | Bezpieczne logowanie"
             "</p>",
             unsafe_allow_html=True,
         )
