@@ -82,6 +82,63 @@ class TestDatabaseEngine:
             assert isinstance(count, int)
             assert count >= 0
 
+    def test_should_list_database_schemas(self):
+        """Test that we can list all schemas in the database."""
+        engine = get_db_engine()
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    SELECT schema_name 
+                    FROM information_schema.schemata 
+                    WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+                    ORDER BY schema_name
+                """)
+            )
+            schemas = [row[0] for row in result]
+            assert len(schemas) > 0, "Expected at least one schema in the database"
+            print(f"\nFound schemas: {schemas}")
+
+    def test_should_list_tables_in_schemas(self):
+        """Test that we can list tables in each schema and verify each has tables."""
+        engine = get_db_engine()
+        with engine.connect() as connection:
+            # Get all user schemas
+            schema_result = connection.execute(
+                text("""
+                    SELECT schema_name 
+                    FROM information_schema.schemata 
+                    WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+                    ORDER BY schema_name
+                """)
+            )
+            schemas = [row[0] for row in schema_result]
+            
+            assert len(schemas) > 0, "Expected at least one schema"
+            
+            # For each schema, get table count
+            schema_table_info = {}
+            for schema in schemas:
+                table_result = connection.execute(
+                    text("""
+                        SELECT table_name 
+                        FROM information_schema.tables 
+                        WHERE table_schema = :schema 
+                        AND table_type = 'BASE TABLE'
+                        ORDER BY table_name
+                    """),
+                    {"schema": schema}
+                )
+                tables = [row[0] for row in table_result]
+                schema_table_info[schema] = tables
+                
+                # Assert each schema has at least one table
+                assert len(tables) > 0, f"Expected schema '{schema}' to have at least one table, but found none"
+            
+            # Print summary
+            print("\nSchema and table information:")
+            for schema, tables in schema_table_info.items():
+                print(f"  {schema}: {len(tables)} tables - {', '.join(tables)}")
+
 
 class TestDatabaseSession:
     """Test database session using SQLAlchemy ORM."""
