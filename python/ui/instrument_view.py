@@ -7,7 +7,6 @@ import pandas as pd
 import plotly.graph_objs as go
 import streamlit as st
 from database import reporting
-from database.crud import get_oid_by_symbol, get_br_symbol_by_xtb, get_profile_for_symbol
 from tools.utils import format_currency_human_readable
 from st_aggrid import AgGrid, GridOptionsBuilder
 
@@ -15,13 +14,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 logger = get_logger(__name__)
 
 
-# Define icons for different recommendation types
-recommendation_type_icons = {
-    "tactical": "⚡",  # Lightning bolt for tactical (quick/short-term)
-    "strategic": "🎯",  # Target for strategic (long-term focus)
-    "fundamental": "📊",  # Chart for fundamental analysis
-    "technical": "📈",  # Trending up for technical analysis
-}
 
 def load_hidden_acum_df() -> pd.DataFrame:
     """
@@ -69,102 +61,7 @@ def load_portfolio_data() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def prepare_display_dataframe(
-    positions_df: pd.DataFrame,
-) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Prepare the dataframe for display by selecting relevant columns and formatting.
 
-    Args:
-        positions_df: DataFrame with all position data
-
-    Returns:
-        Tuple containing:
-        - Formatted DataFrame for display
-        - List of report columns used
-    """
-    # Select columns for display (remove recommendation_type from the list since we'll combine it with symbol)
-    report_cols = [
-        "recommendation_id",
-        "symbol",
-        "volume",
-        "open_price",
-        "close_price",
-        "actual_value",
-        "profit",
-        "profit_perc",
-        "last_decision_ts",
-        "open_time_dt",
-    ]
-
-    # Make sure all columns exist in the dataframe
-    available_cols = [col for col in report_cols if col in positions_df.columns]
-
-    # Create a copy to avoid modifying the original
-    show_df = positions_df[available_cols].copy()
-
-    # Store the original index before sorting
-    show_df["original_positions_index"] = positions_df.index
-
-    # Format datetime columns to readable format
-    datetime_columns = ["last_decision_ts", "open_time_dt"]
-    for col in datetime_columns:
-        if col in show_df.columns:
-            # Convert to datetime if it's not already, then format
-            show_df[col] = pd.to_datetime(show_df[col], errors="coerce")
-            show_df[col] = show_df[col].dt.strftime("%Y-%m-%d %H:%M")
-            # Replace NaT with empty string
-            show_df[col] = show_df[col].fillna("")
-
-    # Combine recommendation_type icon with symbol
-    if "recommendation_type" in positions_df.columns and "symbol" in show_df.columns:
-        # Map recommendation types to icons
-        recommendation_icons = (
-            positions_df["recommendation_type"]
-            .map(recommendation_type_icons)
-            .fillna("📋")
-        )  # Default icon for unknown types
-
-        # Combine icon with symbol
-        show_df["symbol"] = recommendation_icons + " " + show_df["symbol"]
-
-    # Sort by open time but keep track of original indices
-    show_df = show_df.sort_values("open_time_dt", ascending=False).reset_index(
-        drop=True
-    )
-    show_df.index.name = "Lp"
-
-    # Add display column for selectbox
-    show_df["display"] = (
-        show_df["symbol"]
-        + " ["
-        + positions_df.loc[
-            show_df["original_positions_index"], "xtb_instrument_id"
-        ].astype(str)
-        + "]"
-    )
-
-    # Rename columns to be more human-readable
-    column_mapping = {
-        "recommendation_id": "📝 ID",
-        "symbol": "📊 Instrument",
-        "volume": "📦 Wolumen",
-        "open_price": "💰 Cena otwarcia",
-        "close_price": "💹 Cena aktualna",
-        "actual_value": "💎 Wartość aktualna",
-        "profit": "📈 Zysk/Strata (PLN)",
-        "profit_perc": "📊 Zysk/Strata (%)",
-        "open_time_dt": "⏰ Data otwarcia",
-        "last_decision_ts": "🧠 Ostatnia decyzja",
-    }
-
-    # Apply the column mapping
-    show_df = show_df.rename(columns=column_mapping)
-
-    # Update report_cols to reflect the new column names for consistency
-    report_cols_renamed = [column_mapping.get(col, col) for col in available_cols]
-
-    return show_df, report_cols_renamed
 
 
 def select_position(
