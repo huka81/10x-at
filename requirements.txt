@@ -9,6 +9,7 @@ cryptography==44.0.0
 yoyo-migrations
 markdown
 plotly==6.1.1
+streamlit-aggrid
 
 # Testing
 pytest>=8.0.0

@@ -1016,20 +1016,53 @@ def show_instrument_view(oid: int):
     br_code = instrument_profile.get("br_code", "N/A")
     xtb_long_name = instrument_profile.get("xtb_long_name", "N/A")
     branch = instrument_profile.get("branch", "N/A")
+    descript = instrument_profile.get("descript", "N/A")
+    intro_date = instrument_profile.get("intro_date", "N/A")
+    volume = instrument_profile.get("volume", 0)
+    capitalization = instrument_profile.get("capitalization", 0)
+    enterprise_value = instrument_profile.get("enterprive_value", 0)
+    last_ts = instrument_profile.get("last_ts", "N/A")
     
-    # Display instrument summary
+    print(instrument_profile)
+    
+    # Format currency values
+    volume_formatted = format_currency_human_readable(volume)
+    capitalization_formatted = format_currency_human_readable(capitalization)
+    enterprise_value_formatted = format_currency_human_readable(enterprise_value)
+    # Create external link to biznesradar
+    url = f"https://www.biznesradar.pl/notowania/{br_code}"
+    
+    # Display instrument summary with formatted HTML
     st.markdown(
         f"""
-        <div style="background: linear-gradient(90deg, #f0f2f6, #ffffff); 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    border-left: 5px solid #1f77b4;
-                    margin-bottom: 20px;">
+        <div style="
+            background: linear-gradient(90deg, #f0f2f6, #ffffff);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #1f77b4;
+            margin-bottom: 20px;
+        ">
             <h2 style="margin: 0; color: #1f77b4;">
                 📊 {xtb_long_name}
             </h2>
             <p style="margin: 5px 0; color: #666; font-size: 14px;">
-                <strong>Symbol:</strong> {br_code} | <strong>Branża:</strong> {branch} | <strong>OID:</strong> {oid}
+                <strong>Symbol:</strong> {br_code} | 
+                <strong>Branża:</strong> {branch} | 
+                <strong>OID:</strong> {oid}
+                <a href="{url}" target="_blank" style="text-decoration: none; margin-left: 10px;">
+                    <span style="font-size: 20px; color: #1f77b4;">🔗</span>
+                </a>
+            </p>
+            <p style="margin: 10px 0 5px 0; color: #444; font-size: 13px;">
+                <strong>💰 Kapitalizacja:</strong> {capitalization_formatted} | 
+                <strong>🏢 Wartość przedsiębiorstwa:</strong> {enterprise_value_formatted}
+            </p>
+            <p style="margin: 10px 0 5px 0; color: #444; font-size: 13px;">
+                <strong>📅 Data debiutu:</strong> {intro_date} | 
+                <strong>⏰ Ostatni setup:</strong> {last_ts}
+            </p>
+            <p style="margin: 14px 0 5px 0; color: #444; font-size: 13px;">
+                {descript} 
             </p>
         </div>
         """,
@@ -1040,7 +1073,7 @@ def show_instrument_view(oid: int):
     st.subheader("Notowania i punkty akumulacji")
 
     # Load data for charts - use a reasonable lookback period
-    days_back = 30  # Default to 30 days for accumulation analysis
+    days_back = 365  # Default to 30 days for accumulation analysis
     
     logger.info(f"Loading quotes for instrument: {br_code}, oid: {oid}, days_back: {days_back}")
     # Need to get xtb_instrument_id from oid
