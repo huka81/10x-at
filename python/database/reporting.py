@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import text
 from enum import Enum
 
-from database.crud import get_oid_by_symbol, get_xtb_instrument_id, get_br_symbol_by_xtb  # Module not found
+from database.crud import get_oid_by_symbol, get_xtb_instrument_id
 from datetime import datetime
 from database import get_db_engine
 from tools.logger import get_logger
