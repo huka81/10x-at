@@ -72,6 +72,16 @@ class TestDatabaseEngine:
             assert db_name is not None
             assert isinstance(db_name, str)
 
+    def test_should_query_at_users_table_count(self):
+        """Test that we can query the number of records in at.users table."""
+        engine = get_db_engine()
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT COUNT(*) FROM at.users"))
+            count = result.fetchone()[0]
+            assert count is not None
+            assert isinstance(count, int)
+            assert count >= 0
+
 
 class TestDatabaseSession:
     """Test database session using SQLAlchemy ORM."""
