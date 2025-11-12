@@ -2,24 +2,21 @@
 
 ![](./docs/banner.png)
 
-**10x-AT** to niezależny, modularny komponent systemu **[AIvestor.pl](https://aivestor.pl)**, który realizuje wybrane aspekty **analizy technicznej rynków finansowych**.  
-Projekt został zaprojektowany tak, by można go było wdrożyć zarówno jako samodzielny mikroserwis, jak i jako integralny fragment ekosystemu AIvestor.
+**10x-AT** to niezależny, modularny komponent systemu **[AIvestor.pl](https://aivestor.pl)**, który realizuje wybrane aspekty **analizy technicznej rynków finansowych**.   Projekt został zaprojektowany tak, by można go było wdrożyć jako integralny fragment ekosystemu AIvestor. Aktualne repozytorium implementuje logike obliczania oraz wizualna prezentacje wyników na potrzeby **projektu zaliczoniowego ze szkolenia 10xDev**.
 
 ## 🌐 Deployment
 
 Aktualna wersja modułu jest dostępna publicznie pod adresem:  
 👉 **[https://10x.aivestor-ui.pl/](https://10x.aivestor-ui.pl/)**
 
-Serwis jest zbudowany jako **webowy interfejs analizy technicznej (AT)**, który:
-- wizualizuje dane giełdowe w oparciu o autorskie algorytmy,
-- integruje się z rdzeniem AIvestor do analizy trendów, wolumenu i sygnałów,
-- umożliwia eksperymenty z nowymi wskaźnikami i modelami.
 
 ## 🧩 Kontekst projektu
 
-Projekt **10x-AT** stanowi rozszerzenie głównego systemu **[AIvestor.pl](https://aivestor.pl)** — platformy opartej o sztuczną inteligencję, wspomagającej analizę inwestycyjną i automatyzację decyzji rynkowych.
+Referencyjny projekt **[AIvestor.pl](https://aivestor.pl)** to eksperymentalna, wieloagentowa architektura *decision intelligence* (R&D), event‑driven i human‑in‑the‑loop: łączy analizę techniczną, newsy ESPI, sentyment, profil spółek oraz strategię/inencję użytkownika wyrażoną w języku naturalnym. Nie jest produktem komercyjnym ani poradą inwestycyjną – służy do testowania hipotez (explainability, odporność architektury, spójność decyzji).
 
-Ten komponent koncentruje się na **analizie technicznej (Technical Analysis)**, w szczególności:
+Niniejsze repozytorium (**10x-AT**) jest wyłącznie modułem analizy technicznej tego systemu; docelowo zostanie włączony do projektu referencyjnego AIvestor jako jedna z wyspecjalizowanych usług / agentów dostarczająca widoki AT, scoring ukrytej akumulacji i sygnały formacji.
+
+Moduł koncentruje się na **analizie technicznej (Technical Analysis)**, w szczególności:
 - przetwarzaniu i agregacji danych giełdowych (candlestick, volume, OBV, VIX),
 - wykrywaniu formacji oraz anomalii wolumenowych,
 - generowaniu sygnałów „spring" i „box pattern",
@@ -30,7 +27,7 @@ Ten komponent koncentruje się na **analizie technicznej (Technical Analysis)**,
 
 | Obszar | Technologia |
 |--------|--------------|
-| **Backend** | Python 3.11+, PostgreSQL (analiza danych, widoki analityczne) |
+| **Backend** | Python 3.12+, PostgreSQL (analiza danych, widoki analityczne) |
 | **Frontend** | Streamlit (interaktywne wizualizacje), Plotly (wykresy) |
 | **Baza danych** | PostgreSQL 14+ z zaawansowanymi widokami SQL |
 | **Migracje** | Yoyo Migrations |
@@ -52,14 +49,14 @@ Ten komponent koncentruje się na **analizie technicznej (Technical Analysis)**,
 ## AI Tooling
 
 - [GitHub Copilot](https://github.com/features/copilot)
-- [Cursor](https://www.cursor.com)
-- [Windsurf](https://codeium.com/windsurf)
-- [Aider](https://aider.chat)
-- [Cline](https://cline.bot)
+- [ClickUp](https://app.clickup.com)
+- [ChatGPT](https://chatgpt.com)
+- [mermaid.live](https://www.mermaidchart.com)
+- [eraser.io](https://eraser.io)
 
 ## Prerequisites
 
-- Python 3.11 lub wyższy
+- Python 3.12 lub wyższy
 - PostgreSQL 14+ (lokalnie lub zdalnie)
 - pip do zarządzania zależnościami
 
@@ -202,9 +199,9 @@ Moduł `python/etl/calc_accum.py` odpowiada za:
 
 ### Struktura schematów
 
-- **raw** - Surowe dane z zewnętrznych źródeł (XTB, BiznesRadar)
+- **raw** - Surowe dane z zewnętrznych źródeł
 - **trans** - Dane transakcyjne (quotes, session calendar)
-- **at** - Analiza techniczna (widoki, snapshots, users)
+- **at** - Analiza techniczna (widoki, snapshots)
 
 ### Komendy migracji
 
@@ -275,20 +272,9 @@ ptw
 
 Moduł 10x-AT integruje się z platformą AIvestor poprzez:
 - Wspólną bazę danych PostgreSQL
-- API endpoints dla wymiany sygnałów
 - Zunifikowany model danych dla instrumentów finansowych
 - Współdzielone mechanizmy autentykacji
 
-
-## Roadmap
-
-- 🔄 Rozbudowa wskaźników AT (RSI, MACD, Bollinger Bands)
-- 🤖 Integracja z ML models dla predykcji
-- 📱 Mobile-responsive dashboard
-- 🔔 System alertów dla setupów akumulacji
-- 📊 Backtesting engine dla strategii
-- 🌐 API REST dla zewnętrznych integracji
-- 📈 Real-time streaming quotes
 
 ## Contributing
 
